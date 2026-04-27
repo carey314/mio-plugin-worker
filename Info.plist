@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>zh_CN</string>
+    <key>CFBundleExecutable</key>
+    <string>WorkerPlugin</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.mioisland.plugin.worker</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>摸鱼侠</string>
+    <key>CFBundlePackageType</key>
+    <string>BNDL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>NSPrincipalClass</key>
+    <string>WorkerPlugin.WorkerPlugin</string>
+    <!--
+        Panel size: 380×620.
+          - 380 wide matches 看盘侠 — consistent feel across plugins.
+          - 620 tall = 40pt notch reservation + 580pt of card content
+            (top bar + 5-tab pill strip + active tab body + footer).
+    -->
+    <key>MioPluginPreferredWidth</key>
+    <integer>380</integer>
+    <key>MioPluginPreferredHeight</key>
+    <integer>620</integer>
+</dict>
+</plist>
