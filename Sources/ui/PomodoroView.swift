@@ -11,8 +11,8 @@ struct PomodoroView: View {
     @ObservedObject var store: WorkerStore
 
     var body: some View {
-        VStack(spacing: 18) {
-            phaseBadge
+        VStack(spacing: 14) {
+            phaseHeader
 
             timerRing
 
@@ -24,14 +24,22 @@ struct PomodoroView: View {
 
             statsRow
 
-            settingsRow
+            settingsRowPrimary
+            settingsRowSecondary
 
             Spacer(minLength: 0)
         }
         .padding(.top, 8)
     }
 
-    // MARK: - Phase badge
+    // MARK: - Phase header (badge + cycle dots)
+
+    private var phaseHeader: some View {
+        HStack(spacing: 10) {
+            phaseBadge
+            cycleDots
+        }
+    }
 
     private var phaseBadge: some View {
         HStack(spacing: 8) {
@@ -46,6 +54,24 @@ struct PomodoroView: View {
         .padding(.horizontal, 12)
         .frame(height: 26)
         .background(Capsule().fill(WorkerTheme.overlay06))
+    }
+
+    /// Four dots showing position in the 4-focus cycle. Filled = focus
+    /// completed; the last empty dot is the long-break gate. After a
+    /// long break the row resets to all empty (fresh cycle).
+    private var cycleDots: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<4, id: \.self) { i in
+                Circle()
+                    .fill(i < store.pomodoroCycleProgress ? WorkerTheme.tomato : WorkerTheme.overlay12)
+                    .frame(width: 6, height: 6)
+                    .overlay(
+                        Circle()
+                            .stroke(WorkerTheme.overlay18, lineWidth: 0.5)
+                    )
+            }
+        }
+        .help("4 个番茄一组，第 4 个后进入长休息")
     }
 
     private var phaseColor: Color {
@@ -217,7 +243,7 @@ struct PomodoroView: View {
 
     // MARK: - Settings
 
-    private var settingsRow: some View {
+    private var settingsRowPrimary: some View {
         HStack(spacing: 10) {
             stepperPill(
                 title: "专注",
@@ -226,13 +252,54 @@ struct PomodoroView: View {
                 onPlus:  { store.pomodoroSetFocus(store.pomodoroFocusMin + 5) }
             )
             stepperPill(
-                title: "休息",
+                title: "短休",
                 value: store.pomodoroBreakMin,
                 onMinus: { store.pomodoroSetBreak(store.pomodoroBreakMin - 1) },
                 onPlus:  { store.pomodoroSetBreak(store.pomodoroBreakMin + 1) }
             )
         }
         .padding(.horizontal, 16)
+    }
+
+    private var settingsRowSecondary: some View {
+        HStack(spacing: 10) {
+            stepperPill(
+                title: "长休",
+                value: store.pomodoroLongBreakMin,
+                onMinus: { store.pomodoroSetLongBreak(store.pomodoroLongBreakMin - 5) },
+                onPlus:  { store.pomodoroSetLongBreak(store.pomodoroLongBreakMin + 5) }
+            )
+            autoLoopPill
+        }
+        .padding(.horizontal, 16)
+    }
+
+    /// Toggle pill for "auto-loop." Tap to flip; visual state mirrors
+    /// the running tomato (lime when on). Default is on — unchecking
+    /// makes the timer stop after each break for a manual restart.
+    private var autoLoopPill: some View {
+        Button(action: { store.pomodoroSetAutoLoop(!store.pomodoroAutoLoop) }) {
+            HStack(spacing: 6) {
+                Image(systemName: store.pomodoroAutoLoop ? "infinity" : "playpause")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(store.pomodoroAutoLoop ? WorkerTheme.lime : WorkerTheme.fg55)
+                Text(store.pomodoroAutoLoop ? "自动循环" : "单次")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(store.pomodoroAutoLoop ? WorkerTheme.fgPrimary : WorkerTheme.fg70)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 30)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(WorkerTheme.overlay04)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(store.pomodoroAutoLoop ? WorkerTheme.lime.opacity(0.4) : WorkerTheme.overlay08, lineWidth: 0.5)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .help(store.pomodoroAutoLoop ? "番茄/休息自动衔接" : "每次休息结束后停下，等你手动开始")
     }
 
     private func stepperPill(title: String, value: Int, onMinus: @escaping () -> Void, onPlus: @escaping () -> Void) -> some View {

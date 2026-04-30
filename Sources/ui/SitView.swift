@@ -237,11 +237,12 @@ struct SitView: View {
     }
 
     private var tipText: some View {
-        Text("每隔 \(store.sitTriggerMin) 分钟提醒一次，记得起来动一动。")
+        Text("只统计你真正在键盘前的时间。\n离开 5 分钟以上自动归零，午休/会议不会被算进去。")
             .font(.system(size: 11))
             .foregroundColor(WorkerTheme.fg45)
             .padding(.horizontal, 20)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
+            .lineSpacing(2)
     }
 }
