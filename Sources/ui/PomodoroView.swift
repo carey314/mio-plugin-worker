@@ -116,12 +116,10 @@ struct PomodoroView: View {
     }
 
     private var progressFraction: CGFloat {
-        let total: Int
-        switch store.pomodoroPhase {
-        case .focus:           total = store.pomodoroFocusMin * 60
-        case .rest:            total = store.pomodoroBreakMin * 60
-        case .paused, .idle:   total = store.pomodoroFocusMin * 60
-        }
+        // P0 fix (2026-05-19 review): delegate to store so paused-in-break
+        // gets the right denominator. Inline switch couldn't see the
+        // private pausedPhase.
+        let total = store.pomodoroPhaseTotalSec
         guard total > 0 else { return 0 }
         let remaining = max(0, store.pomodoroRemaining)
         return CGFloat(total - remaining) / CGFloat(total)

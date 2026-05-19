@@ -31,22 +31,33 @@ final class WorkerNotificationCenter {
             let status = settings.authorizationStatus
             switch status {
             case .authorized, .provisional, .ephemeral:
-                Task { @MainActor in WorkerNotificationCenter.shared.isAuthorized = true }
+                Task { @MainActor in Self.applyAuthorized(true) }
             case .denied:
-                Task { @MainActor in WorkerNotificationCenter.shared.isAuthorized = false }
+                Task { @MainActor in Self.applyAuthorized(false) }
                 WorkerDebugLog.write("notifications denied — falling back to in-panel dot")
             case .notDetermined:
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
                     if let error = error {
                         WorkerDebugLog.write("notif auth error: \(error)")
                     }
-                    Task { @MainActor in WorkerNotificationCenter.shared.isAuthorized = granted }
+                    Task { @MainActor in Self.applyAuthorized(granted) }
                     WorkerDebugLog.write("notif auth granted=\(granted)")
                 }
             @unknown default:
-                Task { @MainActor in WorkerNotificationCenter.shared.isAuthorized = false }
+                Task { @MainActor in Self.applyAuthorized(false) }
             }
         }
+    }
+
+    /// P0 fix (2026-05-19 review): prior code set
+    /// `WorkerNotificationCenter.shared.isAuthorized` but never
+    /// propagated to `WorkerStore.notificationsAuthorized`. Result: the
+    /// top-bar notif status dot stayed dim even after the user authorized.
+    /// Always write both so observers see consistent state.
+    @MainActor
+    private static func applyAuthorized(_ value: Bool) {
+        WorkerNotificationCenter.shared.isAuthorized = value
+        WorkerStore.shared.notificationsAuthorized = value
     }
 
     /// Fire-and-forget local notification. Returns true if scheduled

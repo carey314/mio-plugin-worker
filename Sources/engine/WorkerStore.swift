@@ -279,6 +279,34 @@ final class WorkerStore: ObservableObject {
 
     // MARK: - Pomodoro
 
+    /// Total duration (seconds) of the active phase. Used as denominator
+    /// for the progress ring fraction in PomodoroView.
+    ///
+    /// P0 fix (2026-05-19 review): the ring previously used
+    /// `pomodoroFocusMin * 60` as denominator for the paused state,
+    /// which is wrong when the user paused mid-break (denominator was
+    /// 25min while remaining was a break's 5min worth → ring read 80%
+    /// done when it was actually ~40%). Now `paused` looks at the
+    /// underlying `pausedPhase` so break/long-break paused renders right.
+    var pomodoroPhaseTotalSec: Int {
+        let isLongBreak = pomodoroCycleProgress >= 4
+        switch pomodoroPhase {
+        case .focus:
+            return pomodoroFocusMin * 60
+        case .rest:
+            return (isLongBreak ? pomodoroLongBreakMin : pomodoroBreakMin) * 60
+        case .paused:
+            switch pausedPhase {
+            case .rest:
+                return (isLongBreak ? pomodoroLongBreakMin : pomodoroBreakMin) * 60
+            default:
+                return pomodoroFocusMin * 60
+            }
+        case .idle:
+            return pomodoroFocusMin * 60
+        }
+    }
+
     func pomodoroStart() {
         if pomodoroPhase == .paused {
             pomodoroPhase = pausedPhase
