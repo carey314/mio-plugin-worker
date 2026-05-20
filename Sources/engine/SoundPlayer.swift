@@ -25,22 +25,29 @@ final class SoundPlayer {
     static let shared = SoundPlayer()
     private init() {}
 
-    /// System Morse sound — 0.7s staccato 3-tone "S".
-    /// Shipped on every macOS since at least 10.0; safe to hard-code path.
-    private let morseURL = URL(fileURLWithPath: "/System/Library/Sounds/Morse.aiff")
+    /// Sit-alert sound. Picked Submarine (1.5s sonar ping) over the
+    /// original Morse — the sonar's longer sustain + lower pitch
+    /// pierces noise-cancelling headphones and meeting audio better,
+    /// while the 15-second 1Hz cadence still drives the urgency.
+    /// To switch back: change to "Morse" / "Tink" / "Ping" / etc.
+    /// All built-in: /System/Library/Sounds/*.aiff
+    private let sitAlertURL = URL(fileURLWithPath: "/System/Library/Sounds/Submarine.aiff")
 
     private var timer: Timer?
     private var remaining: Int = 0
     private var currentSound: NSSound?
 
-    /// Repeated Morse alert: play `count` times at 1Hz. Each play is a
+    /// Repeated sit alert: play `count` times at 1Hz. Each play is a
     /// fresh NSSound so previous-in-flight playback doesn't get stomped
-    /// (NSSound.play() is non-blocking and the 0.7s tone overlaps with
-    /// the next-second silence — acceptable acoustic gap).
+    /// (NSSound.play() is non-blocking; Submarine's 1.5s overlap with
+    /// the next-second trigger creates a slightly layered effect —
+    /// acoustically more present than crisp single beeps).
     ///
     /// Calling while a previous alert is still running cancels the old
     /// one and restarts from `count`. This keeps "user sat back down +
     /// trigger fired again 45min later" clean.
+    ///
+    /// Name retained for source compat (callsite is single, low cost).
     func playMorseSitAlert(count: Int = 15) {
         stop()
         remaining = count
@@ -50,19 +57,21 @@ final class SoundPlayer {
         }
     }
 
-    /// Clockout celebration tone — Glass (1.0s sustained "✨" tone)
-    /// played 3 times with 0.5s gap. Distinct from sit Morse so the
-    /// user instantly knows "下班" not "起来动一下".
+    /// Clockout celebration tone — Hero (1.1s heroic fanfare),
+    /// played 3 times with 0.6s gap. Picked over the original Glass
+    /// for more triumph energy on the "下班" moment. Glass was
+    /// "✨ achievement"; Hero is "🎺 victory" — appropriate scale.
+    /// To switch: change to "Funk" / "Sosumi" / "Glass" / etc.
     func playClockoutCelebration() {
         stop()
-        let glassURL = URL(fileURLWithPath: "/System/Library/Sounds/Glass.aiff")
-        // 3 chimes at 0s, 0.6s, 1.2s — shorter cadence than sit (full
-        // shot of joy, not a nag). Schedule with DispatchQueue async
-        // since this is a fixed-shot pattern, no need for a Timer loop.
+        let celebrationURL = URL(fileURLWithPath: "/System/Library/Sounds/Hero.aiff")
+        // 3 chimes at 0s, 0.6s, 1.2s — full shot of joy, not a nag.
+        // Schedule with DispatchQueue async since this is a fixed-shot
+        // pattern, no need for a Timer loop.
         for delay in [0.0, 0.6, 1.2] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let _ = self else { return }
-                if let s = NSSound(contentsOf: glassURL, byReference: true) {
+                if let s = NSSound(contentsOf: celebrationURL, byReference: true) {
                     s.play()
                 }
             }
@@ -88,11 +97,11 @@ final class SoundPlayer {
         // byReference: true — load lazily from the system path each call.
         // The cost is negligible (< 1ms) and avoids keeping a 200KB AIFF
         // resident across the 45min idle stretch between alerts.
-        if let sound = NSSound(contentsOf: morseURL, byReference: true) {
+        if let sound = NSSound(contentsOf: sitAlertURL, byReference: true) {
             sound.play()
             currentSound = sound
         } else {
-            WorkerDebugLog.write("SoundPlayer: failed to load \(morseURL.path)")
+            WorkerDebugLog.write("SoundPlayer: failed to load \(sitAlertURL.path)")
             stop()
         }
     }
