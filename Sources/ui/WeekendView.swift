@@ -11,22 +11,101 @@ struct WeekendView: View {
     @ObservedObject var store: WorkerStore
 
     var body: some View {
-        VStack(spacing: 18) {
-            statusBadge
+        ScrollView {
+            VStack(spacing: 14) {
+                statusBadge
 
-            heroCountdown
+                heroCountdown
 
-            partsRow
+                partsRow
 
-            Divider()
-                .background(WorkerTheme.overlay08)
-                .padding(.horizontal, 24)
+                if store.nextHoliday != nil {
+                    holidayCard
+                }
 
-            quoteCard
+                Divider()
+                    .background(WorkerTheme.overlay08)
+                    .padding(.horizontal, 24)
 
-            Spacer(minLength: 0)
+                quoteCard
+
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 8)
+            .padding(.bottom, 12)
         }
-        .padding(.top, 8)
+    }
+
+    // MARK: - Holiday card (next 法定假)
+
+    /// Distance-to-next-statutory-holiday card. Splits visual weight
+    /// with the weekend hero so users on a Friday don't just see "1 天
+    /// 2 时" and miss that 国庆放 8 天 is next week.
+    private var holidayCard: some View {
+        Group {
+            if let h = store.nextHoliday {
+                holidayContent(h)
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private func holidayContent(_ h: UpcomingHoliday) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            // Left side: name + days-off line
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "party.popper.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(WorkerTheme.tomato)
+                    Text(h.isOngoing ? "假期中" : "下个法定假")
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundColor(WorkerTheme.fg55)
+                        .tracking(0.3)
+                }
+                Text(h.name)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(WorkerTheme.fgPrimary)
+                Text("放 \(h.days) 天")
+                    .font(.system(size: 11))
+                    .foregroundColor(WorkerTheme.fg55)
+            }
+            Spacer(minLength: 0)
+            // Right side: distance / "假期中"
+            VStack(alignment: .trailing, spacing: 2) {
+                if h.isOngoing {
+                    Text("🎉")
+                        .font(.system(size: 28))
+                } else {
+                    Text("\(h.daysUntil)")
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundColor(WorkerTheme.tomato)
+                        .monospacedDigit()
+                    Text("天后")
+                        .font(.system(size: 10))
+                        .foregroundColor(WorkerTheme.fg55)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            WorkerTheme.tomato.opacity(0.10),
+                            WorkerTheme.tomato.opacity(0.02)
+                        ],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(WorkerTheme.tomato.opacity(0.30), lineWidth: 0.5)
+                )
+        )
     }
 
     // MARK: - Status

@@ -683,6 +683,13 @@ final class WorkerStore: ObservableObject {
     /// True iff today is Saturday or Sunday (local time). Used by
     /// ClockoutView to switch to a "今天不上班" mode without forcing
     /// the user to fiddle with their clockout time on the weekend.
+    /// Next statutory China holiday, or nil if none configured.
+    /// Backed by `HolidayDatabase`. WeekendView uses this to render
+    /// the "距下个法定假 N 天" card.
+    var nextHoliday: UpcomingHoliday? {
+        HolidayDatabase.upcoming(from: Date(), timeZone: calendar.timeZone)
+    }
+
     var isWeekend: Bool {
         let weekday = calendar.component(.weekday, from: Date())
         return weekday == 1 || weekday == 7  // Sun = 1, Sat = 7
