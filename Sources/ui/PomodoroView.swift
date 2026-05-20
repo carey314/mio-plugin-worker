@@ -201,7 +201,7 @@ struct PomodoroView: View {
     // MARK: - Stats
 
     private var statsRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             statCard(
                 title: "今日番茄",
                 value: "\(store.pomodoroTodayCount)",
@@ -212,8 +212,30 @@ struct PomodoroView: View {
                 value: "\(store.pomodoroTodayCount * store.pomodoroFocusMin)分",
                 accent: WorkerTheme.lime
             )
+            // Quality score: dimmed (em-dash) when n=0, otherwise the
+            // running average across today's focus phases.
+            // 8 / 10 = "1500s focus with ≤300s idle" — solid focus
+            // 5 / 10 = "half the time I was elsewhere"
+            // <3   = "you were not really pomodoro-ing"
+            statCard(
+                title: "今日均分",
+                value: store.pomodoroQualityTodayN == 0
+                    ? "—"
+                    : String(format: "%.1f", store.pomodoroQualityTodayAvg),
+                accent: store.pomodoroQualityTodayN == 0
+                    ? WorkerTheme.fg40
+                    : qualityAccent(store.pomodoroQualityTodayAvg)
+            )
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
+    }
+
+    /// Score → colour: high = lime, mid = tomato, low = alertRed.
+    /// Visual sanity-check on glance — green is good.
+    private func qualityAccent(_ score: Double) -> Color {
+        if score >= 8 { return WorkerTheme.lime }
+        if score >= 5 { return WorkerTheme.tomato }
+        return WorkerTheme.alertRed
     }
 
     private func statCard(title: String, value: String, accent: Color) -> some View {

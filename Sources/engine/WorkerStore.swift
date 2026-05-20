@@ -27,6 +27,7 @@ import SwiftUI
 
 private enum K {
     static let pomodoroHistory       = "pomodoro.history"        // [String: Int] (yyyy-MM-dd → count)
+    static let pomodoroQualityHist   = "pomodoro.qualityHistory" // [String: [Double]] (yyyy-MM-dd → [quality, ...])
     static let pomodoroFocusMin      = "pomodoro.focusMin"       // Int, default 25
     static let pomodoroBreakMin      = "pomodoro.breakMin"       // Int, default 5
     static let pomodoroLongBreakMin  = "pomodoro.longBreakMin"   // Int, default 15
@@ -105,6 +106,17 @@ final class WorkerStore: ObservableObject {
     /// break ends, this resets to 0. Dot indicator in PomodoroView reads
     /// this to draw the "🍅🍅⚪️⚪️" cycle position.
     @Published var pomodoroCycleProgress: Int = 0
+    /// Today's average focus-quality score (0..10). 10 = full focus
+    /// (no >30s idle gap during any focus phase); 0 = idle the whole
+    /// time. Updated each time a focus phase ends.
+    @Published var pomodoroQualityTodayAvg: Double = 0
+    /// Number of focus phases that contributed to today's avg.
+    /// Used by PomodoroView to dim the score when n=0.
+    @Published var pomodoroQualityTodayN: Int = 0
+    /// Idle seconds accumulated within the active focus phase. A "second
+    /// of idleness" = a 1Hz tick where SystemIdle.seconds > 30. Used to
+    /// compute the focus quality on phase end.
+    private var currentFocusIdleSec: Int = 0
 
     /// Wallclock target. tick computes remaining = endsAt - now. Storing
     /// this (instead of decrementing a counter every second) means the
@@ -224,6 +236,13 @@ final class WorkerStore: ObservableObject {
            pomodoroPhase == .focus || pomodoroPhase == .rest {
             let remaining = max(0, Int(endsAt.timeIntervalSinceNow))
             pomodoroRemaining = remaining
+            // Accumulate idle time during focus phases so we can score
+            // quality on phase end. Threshold > 30s drops "I'm thinking
+            // about the code" false positives but catches "I went to
+            // Slack / opened YouTube" real distractions.
+            if pomodoroPhase == .focus && SystemIdle.seconds > 30 {
+                currentFocusIdleSec += 1
+            }
             if remaining <= 0 {
                 pomodoroPhaseEnded()
             }
@@ -485,6 +504,16 @@ final class WorkerStore: ObservableObject {
                 WorkerDebugLog.write("water +1 from pomodoro phase end")
             }
 
+            // Score the just-ended focus phase. focusSec is the total
+            // wallclock length (pomodoroFocusMin × 60); idleSec is what
+            // tickFire accumulated. quality = 10 × (1 − idle/total).
+            let focusSec = max(1, pomodoroFocusMin * 60)
+            let idleSec = min(currentFocusIdleSec, focusSec)
+            let quality = 10.0 * (1.0 - Double(idleSec) / Double(focusSec))
+            recordPomodoroQuality(quality)
+            WorkerDebugLog.write("pomodoro focus quality = \(String(format: "%.1f", quality)) (idle \(idleSec)s / \(focusSec)s)")
+            currentFocusIdleSec = 0  // reset for next focus
+
             // 4th focus in the cycle → long break; otherwise short.
             let isLongBreak = pomodoroCycleProgress >= 4
             let breakMin = isLongBreak ? pomodoroLongBreakMin : pomodoroBreakMin
@@ -537,6 +566,21 @@ final class WorkerStore: ObservableObject {
         var dict = (defaults.dictionary(forKey: K.pomodoroHistory) as? [String: Int]) ?? [:]
         dict[Self.dateKey(Date(), calendar: calendar)] = pomodoroTodayCount
         defaults.set(dict, forKey: K.pomodoroHistory)
+    }
+
+    /// Append `q` to today's quality list and recompute the published
+    /// average. Stored as `[String: [Double]]` in defaults — keyed by
+    /// the same yyyy-MM-dd date string as pomodoroHistory so a
+    /// future "today: 6 focuses, avg 8.4/10" reads both in sync.
+    private func recordPomodoroQuality(_ q: Double) {
+        let today = Self.dateKey(Date(), calendar: calendar)
+        var dict = (defaults.dictionary(forKey: K.pomodoroQualityHist) as? [String: [Double]]) ?? [:]
+        var list = dict[today] ?? []
+        list.append(q)
+        dict[today] = list
+        defaults.set(dict, forKey: K.pomodoroQualityHist)
+        pomodoroQualityTodayN = list.count
+        pomodoroQualityTodayAvg = list.reduce(0, +) / Double(list.count)
     }
 
     /// Persist the runtime fields that change with start/pause/reset/phase
@@ -712,6 +756,11 @@ final class WorkerStore: ObservableObject {
             pomodoroTodayCount = pomDict[today] ?? 0
             let waterDict = (defaults.dictionary(forKey: K.waterHistory) as? [String: Int]) ?? [:]
             waterCupsToday = waterDict[today] ?? 0
+            // Quality history resets too.
+            let qDict = (defaults.dictionary(forKey: K.pomodoroQualityHist) as? [String: [Double]]) ?? [:]
+            let todayQs = qDict[today] ?? []
+            pomodoroQualityTodayN = todayQs.count
+            pomodoroQualityTodayAvg = todayQs.isEmpty ? 0 : todayQs.reduce(0, +) / Double(todayQs.count)
             // Sitting through midnight is weird — start a fresh day's
             // active-time count so the badge doesn't show "已坐 1380 分".
             sitAccumActiveSec = 0
@@ -741,6 +790,12 @@ final class WorkerStore: ObservableObject {
         let today = Self.dateKey(Date(), calendar: calendar)
         pomodoroTodayCount = pomDict[today] ?? 0
         lastSeenDay = today
+
+        // Quality history for today (used for the "今日均分" stat card).
+        let qDict = (defaults.dictionary(forKey: K.pomodoroQualityHist) as? [String: [Double]]) ?? [:]
+        let todayQs = qDict[today] ?? []
+        pomodoroQualityTodayN = todayQs.count
+        pomodoroQualityTodayAvg = todayQs.isEmpty ? 0 : todayQs.reduce(0, +) / Double(todayQs.count)
 
         // Pomodoro — runtime resume.
         let pausedRaw = defaults.string(forKey: K.pomodoroPausedPhase) ?? "focus"
