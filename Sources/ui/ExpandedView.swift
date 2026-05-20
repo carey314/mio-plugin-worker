@@ -148,7 +148,7 @@ struct ExpandedView: View {
                 Text(footerLeftText)
             }
             Spacer()
-            Text("v0.1 · 本地运行")
+            Text("v0.3.0 · 本地运行")
         }
         .font(.system(size: 11))
         .foregroundColor(WorkerTheme.fg40)

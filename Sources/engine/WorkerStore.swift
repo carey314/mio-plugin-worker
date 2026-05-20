@@ -45,7 +45,7 @@ private enum K {
     static let waterGoal             = "water.goal"              // Int, default 8
     static let waterAutoFromPomo     = "water.autoFromPomo"      // Bool, default true
     static let waterHourlyReminder   = "water.hourlyReminder"    // Bool, default true
-    static let lastWaterReminderHr   = "water.lastReminderHour"  // Int, hour 0-23 last fired (per day)
+    static let lastWaterReminderHr   = "water.lastReminderHour"  // String "yyyy-MM-dd HH" — last hour that fired, scoped per-day
     static let clockoutHHmm          = "clockout.hhmm"           // String "18:00"
     static let lastClockoutCelebDate = "clockout.lastCelebDate"  // String yyyy-MM-dd, dedupe per-day
 }
@@ -357,12 +357,13 @@ final class WorkerStore: ObservableObject {
         guard (9...18).contains(hour) else { return }
         // Already reached goal — no nag.
         guard waterCupsToday < waterGoal else { return }
-        let lastFiredHour = defaults.integer(forKey: K.lastWaterReminderHr)
-        // Sentinel: 0 means "never fired" — first run at any hour >= 9
-        // will pass the != check. We accept one wasted re-fire on the
-        // boundary case where last == hour 0 from a fresh install.
-        guard lastFiredHour != hour else { return }
-        defaults.set(hour, forKey: K.lastWaterReminderHr)
+        // Scope dedupe by date+hour so yesterday's 17:00 doesn't block
+        // today's 17:00. Prior int-only key blocked the same hour
+        // forever within calendar 24h cycles.
+        let key = "\(Self.dateKey(now, calendar: calendar)) \(String(format: "%02d", hour))"
+        let lastFiredKey = defaults.string(forKey: K.lastWaterReminderHr) ?? ""
+        guard lastFiredKey != key else { return }
+        defaults.set(key, forKey: K.lastWaterReminderHr)
         let remaining = waterGoal - waterCupsToday
         WorkerNotificationCenter.shared.notify(
             title: "💧 喝水时间到",

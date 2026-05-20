@@ -13,7 +13,7 @@ final class WorkerPlugin: NSObject, MioPlugin {
     var id: String { "worker" }
     var name: String { "摸鱼侠" }
     var icon: String { "fish.fill" }
-    var version: String { "0.2.0" }
+    var version: String { "0.3.0" }
 
     func activate() {
         WorkerDebugLog.write("plugin activate")
