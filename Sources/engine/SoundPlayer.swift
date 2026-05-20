@@ -50,6 +50,25 @@ final class SoundPlayer {
         }
     }
 
+    /// Clockout celebration tone — Glass (1.0s sustained "✨" tone)
+    /// played 3 times with 0.5s gap. Distinct from sit Morse so the
+    /// user instantly knows "下班" not "起来动一下".
+    func playClockoutCelebration() {
+        stop()
+        let glassURL = URL(fileURLWithPath: "/System/Library/Sounds/Glass.aiff")
+        // 3 chimes at 0s, 0.6s, 1.2s — shorter cadence than sit (full
+        // shot of joy, not a nag). Schedule with DispatchQueue async
+        // since this is a fixed-shot pattern, no need for a Timer loop.
+        for delay in [0.0, 0.6, 1.2] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let _ = self else { return }
+                if let s = NSSound(contentsOf: glassURL, byReference: true) {
+                    s.play()
+                }
+            }
+        }
+    }
+
     /// Cancel any in-flight alert. Called by WorkerStore.sitStop() so
     /// "user stopped sit monitoring" silences the nag immediately.
     func stop() {

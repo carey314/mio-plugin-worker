@@ -43,6 +43,7 @@ private enum K {
     static let waterHistory          = "water.history"           // [String: Int] (date → cups)
     static let waterGoal             = "water.goal"              // Int, default 8
     static let clockoutHHmm          = "clockout.hhmm"           // String "18:00"
+    static let lastClockoutCelebDate = "clockout.lastCelebDate"  // String yyyy-MM-dd, dedupe per-day
 }
 
 private let suiteName = "com.mioisland.plugin.worker"
@@ -139,6 +140,15 @@ final class WorkerStore: ObservableObject {
     /// Clockout
     @Published var clockoutHour: Int = 18
     @Published var clockoutMinute: Int = 0
+    /// Brief celebratory flag — true for ~5s after crossing the clockout
+    /// boundary. ClockoutView reads this to overlay a banner. Reset by
+    /// the tick after the fade window.
+    @Published var clockoutCelebrationActive: Bool = false
+    /// Wallclock at which celebration should clear. Tick monitors this.
+    private var clockoutCelebrationEndsAt: Date? = nil
+    /// Previous tick's clockout remaining seconds. Used to detect the
+    /// >0 → 0 crossing edge.
+    private var prevClockoutRemSec: Int? = nil
 
     /// Weekend (derived)
     @Published var weekendDays: Int = 0
@@ -285,8 +295,41 @@ final class WorkerStore: ObservableObject {
         // 3. Weekend countdown — recompute every tick (cheap).
         recomputeWeekend()
 
-        // 4. Detect day rollover for pomodoro / water / sit counters.
+        // 4. Clockout — fire celebration on the boundary crossing edge.
+        let curClockoutRem = clockoutRemainingSec
+        if let prev = prevClockoutRemSec, prev > 0 && curClockoutRem == 0 {
+            triggerClockoutCelebrationIfNeeded()
+        }
+        prevClockoutRemSec = curClockoutRem
+        // Clear the celebration flag once the fade window elapses.
+        if let endsAt = clockoutCelebrationEndsAt, Date() >= endsAt {
+            clockoutCelebrationActive = false
+            clockoutCelebrationEndsAt = nil
+        }
+
+        // 5. Detect day rollover for pomodoro / water / sit counters.
         rolloverIfNeeded()
+    }
+
+    /// Per-day-deduped celebration trigger. Fires UN notification +
+    /// Glass tone × 3 + sets the in-panel banner flag for ~5s.
+    private func triggerClockoutCelebrationIfNeeded() {
+        let today = Self.dateKey(Date(), calendar: calendar)
+        let lastCeleb = defaults.string(forKey: K.lastClockoutCelebDate) ?? ""
+        guard lastCeleb != today else {
+            WorkerDebugLog.write("clockout boundary @ \(today) but already celebrated, skip")
+            return
+        }
+        defaults.set(today, forKey: K.lastClockoutCelebDate)
+
+        WorkerDebugLog.write("clockout celebration fired for \(today)")
+        WorkerNotificationCenter.shared.notify(
+            title: "今日打卡下班 🎉",
+            body: "辛苦了，到点了，关 IDE 下班！"
+        )
+        SoundPlayer.shared.playClockoutCelebration()
+        clockoutCelebrationActive = true
+        clockoutCelebrationEndsAt = Date().addingTimeInterval(5.0)
     }
 
     // MARK: - Pomodoro
@@ -523,18 +566,24 @@ final class WorkerStore: ObservableObject {
         defaults.set(String(format: "%02d:%02d", h, m), forKey: K.clockoutHHmm)
     }
 
-    /// Seconds remaining until today's clockout. If it's already past,
-    /// returns the seconds until tomorrow's clockout (rolls over).
+    /// Seconds remaining until **today's** clockout. Returns 0 when
+    /// already past — the next day rolls automatically when calendar's
+    /// dateComponents(.year,.month,.day, from: now) picks up the new
+    /// date after midnight.
+    ///
+    /// Prior version rolled forward to tomorrow on `target <= now`, so
+    /// the moment clockout was hit the counter jumped 1s → 86399s with
+    /// no observable "zero" frame — celebrating the "下班" moment was
+    /// impossible. Now: hit zero, hold zero until midnight, restart at
+    /// new day's wall-time countdown.
     var clockoutRemainingSec: Int {
         let now = Date()
         var comps = calendar.dateComponents([.year, .month, .day], from: now)
         comps.hour = clockoutHour
         comps.minute = clockoutMinute
         comps.second = 0
-        var target = calendar.date(from: comps) ?? now
-        if target <= now {
-            target = calendar.date(byAdding: .day, value: 1, to: target) ?? target
-        }
+        guard let target = calendar.date(from: comps) else { return 0 }
+        if target <= now { return 0 }
         return max(0, Int(target.timeIntervalSince(now)))
     }
 

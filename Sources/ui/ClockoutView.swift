@@ -14,26 +14,66 @@ struct ClockoutView: View {
     @State private var editMinute: Int = 0
 
     var body: some View {
-        VStack(spacing: 18) {
-            statusBadge
+        ZStack(alignment: .top) {
+            VStack(spacing: 18) {
+                statusBadge
 
-            countdownDisplay
+                countdownDisplay
 
-            progressBar
+                progressBar
 
-            controls
+                controls
 
-            Divider()
-                .background(WorkerTheme.overlay08)
-                .padding(.horizontal, 24)
+                Divider()
+                    .background(WorkerTheme.overlay08)
+                    .padding(.horizontal, 24)
 
-            timeRow
+                timeRow
 
-            tipText
+                tipText
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 8)
+
+            // Celebration banner — overlays the panel for ~5s after the
+            // user crosses today's clockout boundary. Subtle gold→lime
+            // shimmer so it pops without being kindergarten-style confetti.
+            if store.clockoutCelebrationActive {
+                celebrationBanner
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .opacity
+                        )
+                    )
+            }
         }
-        .padding(.top, 8)
+        .animation(.spring(response: 0.35, dampingFraction: 0.78),
+                   value: store.clockoutCelebrationActive)
+    }
+
+    private var celebrationBanner: some View {
+        VStack(spacing: 4) {
+            Text("🎉 今日打卡下班 🎉")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.black)
+            Text("辛苦了，到点了，关 IDE 下班！")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.black.opacity(0.7))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(
+            LinearGradient(
+                colors: [WorkerTheme.lime, WorkerTheme.tomato.opacity(0.95)],
+                startPoint: .leading, endPoint: .trailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .shadow(color: WorkerTheme.lime.opacity(0.45), radius: 16, x: 0, y: 4)
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
     }
 
     // MARK: - Status
@@ -236,7 +276,7 @@ struct ClockoutView: View {
     }
 
     private var tipText: some View {
-        Text("下班时间到时不会响铃 —\n本插件只负责让你看着时间倒计时偷着乐。")
+        Text("到点会有通知 + 一段 Glass 音效庆祝下班\n每日只触发一次，重启插件不会重复响铃。")
             .font(.system(size: 11))
             .foregroundColor(WorkerTheme.fg45)
             .padding(.horizontal, 20)
