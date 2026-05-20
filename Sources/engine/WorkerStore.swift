@@ -245,23 +245,31 @@ final class WorkerStore: ObservableObject {
 
             sitElapsedSec = sitAccumActiveSec
 
-            // Threshold notification, deduped by triggerSec.
+            // Threshold notification — fire once, then reset the
+            // accumulator so the next triggerSec of sitting kicks a
+            // FRESH cycle. The prior dedupe-by-lastFired path kept the
+            // counter monotonically growing, so the panel showed "已坐
+            // 90 分钟" / "已坐 135 分钟" instead of restarting each
+            // cycle. Reset is the simpler dedupe: physically can't
+            // re-fire until the user accumulates another triggerSec.
             let triggerSec = sitTriggerMin * 60
             if triggerSec > 0 && sitElapsedSec >= triggerSec {
-                let lastFired = defaults.double(forKey: K.sitLastNotified)
-                let nowTs = Date().timeIntervalSince1970
-                if nowTs - lastFired >= Double(triggerSec) {
-                    defaults.set(nowTs, forKey: K.sitLastNotified)
-                    WorkerNotificationCenter.shared.notify(
-                        title: "该起来动一下了",
-                        body: "你已连续坐了 \(sitTriggerMin) 分钟，起身喝口水吧。"
-                    )
-                    // 1Hz × 15 ticks of system Morse tone — the UN
-                    // notification ding is too easy to miss in a meeting,
-                    // so the sit alert gets a louder, longer signal.
-                    SoundPlayer.shared.playMorseSitAlert(count: 15)
-                    WorkerDebugLog.write("sit threshold notification + morse alert fired (\(sitElapsedSec)s)")
-                }
+                WorkerNotificationCenter.shared.notify(
+                    title: "该起来动一下了",
+                    body: "你已连续坐了 \(sitTriggerMin) 分钟，起身喝口水吧。"
+                )
+                // 1Hz × 15 ticks of system Morse tone — the UN
+                // notification ding is too easy to miss in a meeting,
+                // so the sit alert gets a louder, longer signal.
+                SoundPlayer.shared.playMorseSitAlert(count: 15)
+                WorkerDebugLog.write("sit threshold fired @ \(sitElapsedSec)s — resetting accumulator")
+
+                // Reset for next cycle. Update lastFired for telemetry
+                // even though it's no longer the dedupe gate.
+                sitAccumActiveSec = 0
+                sitElapsedSec = 0
+                defaults.set(0, forKey: K.sitAccumActive)
+                defaults.set(Date().timeIntervalSince1970, forKey: K.sitLastNotified)
             }
 
             // Persist accumulator once every N ticks (cheap & resilient).
