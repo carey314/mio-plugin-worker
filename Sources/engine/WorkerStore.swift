@@ -42,6 +42,9 @@ private enum K {
     static let sitAccumActive        = "sit.accumActive"         // Int seconds, persisted active time
     static let waterHistory          = "water.history"           // [String: Int] (date → cups)
     static let waterGoal             = "water.goal"              // Int, default 8
+    static let waterAutoFromPomo     = "water.autoFromPomo"      // Bool, default true
+    static let waterHourlyReminder   = "water.hourlyReminder"    // Bool, default true
+    static let lastWaterReminderHr   = "water.lastReminderHour"  // Int, hour 0-23 last fired (per day)
     static let clockoutHHmm          = "clockout.hhmm"           // String "18:00"
     static let lastClockoutCelebDate = "clockout.lastCelebDate"  // String yyyy-MM-dd, dedupe per-day
 }
@@ -136,6 +139,13 @@ final class WorkerStore: ObservableObject {
     /// Water
     @Published var waterCupsToday: Int = 0
     @Published var waterGoal: Int = 8
+    /// When ON (default), completing a pomodoro focus phase auto-adds
+    /// 1 cup. Lazy-tracker users get streak-built without manual taps.
+    @Published var waterAutoFromPomodoro: Bool = true
+    /// When ON (default), hourly notification fires during 9-18 if today's
+    /// cups < goal. Dedupe by last-fired-hour so plugin restart doesn't
+    /// double-fire the same hour.
+    @Published var waterHourlyReminder: Bool = true
 
     /// Clockout
     @Published var clockoutHour: Int = 18
@@ -295,6 +305,9 @@ final class WorkerStore: ObservableObject {
         // 3. Weekend countdown — recompute every tick (cheap).
         recomputeWeekend()
 
+        // 3.5. Water hourly reminder — workday window only.
+        maybeFireWaterHourlyReminder(now: now)
+
         // 4. Clockout — fire celebration on the boundary crossing edge.
         let curClockoutRem = clockoutRemainingSec
         if let prev = prevClockoutRemSec, prev > 0 && curClockoutRem == 0 {
@@ -309,6 +322,34 @@ final class WorkerStore: ObservableObject {
 
         // 5. Detect day rollover for pomodoro / water / sit counters.
         rolloverIfNeeded()
+    }
+
+    /// Hourly water nag — fires once at the top of the hour during
+    /// workday (9..18) on weekdays if the user's behind their cup goal.
+    /// Dedupes by storing the last-fired hour; plugin restart inside
+    /// the same hour won't re-fire.
+    private func maybeFireWaterHourlyReminder(now: Date) {
+        guard waterHourlyReminder else { return }
+        // Weekend = no nag — combined with the existing isWeekend gate
+        // for clockout, this keeps Saturday/Sunday quiet.
+        let weekday = calendar.component(.weekday, from: now)
+        guard (2...6).contains(weekday) else { return }
+        let hour = calendar.component(.hour, from: now)
+        guard (9...18).contains(hour) else { return }
+        // Already reached goal — no nag.
+        guard waterCupsToday < waterGoal else { return }
+        let lastFiredHour = defaults.integer(forKey: K.lastWaterReminderHr)
+        // Sentinel: 0 means "never fired" — first run at any hour >= 9
+        // will pass the != check. We accept one wasted re-fire on the
+        // boundary case where last == hour 0 from a fresh install.
+        guard lastFiredHour != hour else { return }
+        defaults.set(hour, forKey: K.lastWaterReminderHr)
+        let remaining = waterGoal - waterCupsToday
+        WorkerNotificationCenter.shared.notify(
+            title: "💧 喝水时间到",
+            body: "今天已喝 \(waterCupsToday) 杯，距 \(waterGoal) 杯目标还差 \(remaining) 杯。"
+        )
+        WorkerDebugLog.write("water hourly reminder fired @ \(hour):00, cups \(waterCupsToday)/\(waterGoal)")
     }
 
     /// Per-day-deduped celebration trigger. Fires UN notification +
@@ -435,6 +476,15 @@ final class WorkerStore: ObservableObject {
             pomodoroCycleProgress = min(4, pomodoroCycleProgress + 1)
             defaults.set(pomodoroCycleProgress, forKey: K.pomodoroCycleProg)
 
+            // Cross-tab boost: a completed focus phase auto-logs a cup
+            // of water unless the user has flipped the toggle off.
+            // Rationale: people who do pomodoro typically need a break +
+            // water anyway — couple the data so they don't have to tap.
+            if waterAutoFromPomodoro {
+                waterAddCup()
+                WorkerDebugLog.write("water +1 from pomodoro phase end")
+            }
+
             // 4th focus in the cycle → long break; otherwise short.
             let isLongBreak = pomodoroCycleProgress >= 4
             let breakMin = isLongBreak ? pomodoroLongBreakMin : pomodoroBreakMin
@@ -548,6 +598,16 @@ final class WorkerStore: ObservableObject {
         let v = max(1, goal)
         waterGoal = v
         defaults.set(v, forKey: K.waterGoal)
+    }
+
+    func waterSetAutoFromPomodoro(_ on: Bool) {
+        waterAutoFromPomodoro = on
+        defaults.set(on, forKey: K.waterAutoFromPomo)
+    }
+
+    func waterSetHourlyReminder(_ on: Bool) {
+        waterHourlyReminder = on
+        defaults.set(on, forKey: K.waterHourlyReminder)
     }
 
     private func persistWaterToday() {
@@ -749,6 +809,14 @@ final class WorkerStore: ObservableObject {
         waterGoal = storedGoal > 0 ? storedGoal : 8
         let waterDict = (defaults.dictionary(forKey: K.waterHistory) as? [String: Int]) ?? [:]
         waterCupsToday = waterDict[today] ?? 0
+        // Toggle defaults — "explicit-set check" so an installed-with-
+        // false user doesn't get flipped back to true on update.
+        waterAutoFromPomodoro = defaults.object(forKey: K.waterAutoFromPomo) != nil
+            ? defaults.bool(forKey: K.waterAutoFromPomo)
+            : true
+        waterHourlyReminder = defaults.object(forKey: K.waterHourlyReminder) != nil
+            ? defaults.bool(forKey: K.waterHourlyReminder)
+            : true
 
         // Clockout
         let hhmm = defaults.string(forKey: K.clockoutHHmm) ?? "18:00"

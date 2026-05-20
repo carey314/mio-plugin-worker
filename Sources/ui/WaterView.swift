@@ -11,24 +11,86 @@ struct WaterView: View {
     @ObservedObject var store: WorkerStore
 
     var body: some View {
-        VStack(spacing: 18) {
-            statusBadge
+        ScrollView {
+            VStack(spacing: 14) {
+                statusBadge
 
-            cupHero
+                cupHero
 
-            controls
+                controls
 
-            Divider()
-                .background(WorkerTheme.overlay08)
-                .padding(.horizontal, 24)
+                Divider()
+                    .background(WorkerTheme.overlay08)
+                    .padding(.horizontal, 24)
 
-            goalRow
+                goalRow
+                toggleRows
 
-            tipText
+                tipText
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 8)
+            .padding(.bottom, 8)
         }
-        .padding(.top, 8)
+    }
+
+    // MARK: - Toggle rows (auto-from-pomodoro + hourly reminder)
+
+    private var toggleRows: some View {
+        VStack(spacing: 8) {
+            togglePill(
+                icon: "timer",
+                label: "番茄完成 +1 杯",
+                isOn: store.waterAutoFromPomodoro,
+                tint: WorkerTheme.tomato,
+                action: { store.waterSetAutoFromPomodoro(!store.waterAutoFromPomodoro) }
+            )
+            togglePill(
+                icon: "bell.fill",
+                label: "整点提醒（9–18 点）",
+                isOn: store.waterHourlyReminder,
+                tint: WorkerTheme.water,
+                action: { store.waterSetHourlyReminder(!store.waterHourlyReminder) }
+            )
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func togglePill(icon: String, label: String, isOn: Bool, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(isOn ? tint : WorkerTheme.fg55)
+                    .frame(width: 18)
+                Text(label)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundColor(isOn ? WorkerTheme.fgPrimary : WorkerTheme.fg70)
+                Spacer()
+                // Slim track-style toggle indicator.
+                ZStack(alignment: isOn ? .trailing : .leading) {
+                    Capsule()
+                        .fill(isOn ? tint.opacity(0.35) : WorkerTheme.overlay08)
+                        .frame(width: 28, height: 16)
+                    Circle()
+                        .fill(isOn ? tint : WorkerTheme.fg55)
+                        .frame(width: 12, height: 12)
+                        .padding(2)
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(WorkerTheme.overlay04)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(isOn ? tint.opacity(0.35) : WorkerTheme.overlay08, lineWidth: 0.5)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Status
