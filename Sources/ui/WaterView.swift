@@ -11,44 +11,43 @@ struct WaterView: View {
     @ObservedObject var store: WorkerStore
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                statusBadge
+        // No ScrollView — panel body sits at ~470pt available and we
+        // tune everything below to fit: tighter VStack spacing, smaller
+        // cup hero, toggles on a single row, no tipText.
+        VStack(spacing: 10) {
+            statusBadge
 
-                cupHero
+            cupHero
 
-                controls
+            controls
 
-                Divider()
-                    .background(WorkerTheme.overlay08)
-                    .padding(.horizontal, 24)
+            Divider()
+                .background(WorkerTheme.overlay08)
+                .padding(.horizontal, 24)
 
-                goalRow
-                toggleRows
+            goalRow
+            toggleRow
 
-                tipText
-
-                Spacer(minLength: 0)
-            }
-            .padding(.top, 8)
-            .padding(.bottom, 8)
+            Spacer(minLength: 0)
         }
+        .padding(.top, 6)
     }
 
-    // MARK: - Toggle rows (auto-from-pomodoro + hourly reminder)
+    // MARK: - Toggle row (compact horizontal layout — saves vertical
+    // space so the whole tab fits without a scroll bar).
 
-    private var toggleRows: some View {
-        VStack(spacing: 8) {
+    private var toggleRow: some View {
+        HStack(spacing: 8) {
             togglePill(
                 icon: "timer",
-                label: "番茄完成 +1 杯",
+                label: "🍅 +1",
                 isOn: store.waterAutoFromPomodoro,
                 tint: WorkerTheme.tomato,
                 action: { store.waterSetAutoFromPomodoro(!store.waterAutoFromPomodoro) }
             )
             togglePill(
                 icon: "bell.fill",
-                label: "整点提醒（9–18 点）",
+                label: "整点提醒",
                 isOn: store.waterHourlyReminder,
                 tint: WorkerTheme.water,
                 action: { store.waterSetHourlyReminder(!store.waterHourlyReminder) }
@@ -57,35 +56,38 @@ struct WaterView: View {
         .padding(.horizontal, 16)
     }
 
+    /// Compact toggle for the horizontal toggleRow. Icon + short label +
+    /// inline slim toggle track inside a single capsule. Sized to fit
+    /// 2 across a 380pt panel with 16pt horizontal padding.
     private func togglePill(icon: String, label: String, isOn: Bool, tint: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(isOn ? tint : WorkerTheme.fg55)
-                    .frame(width: 18)
                 Text(label)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundColor(isOn ? WorkerTheme.fgPrimary : WorkerTheme.fg70)
-                Spacer()
-                // Slim track-style toggle indicator.
+                    .lineLimit(1)
+                Spacer(minLength: 4)
                 ZStack(alignment: isOn ? .trailing : .leading) {
                     Capsule()
                         .fill(isOn ? tint.opacity(0.35) : WorkerTheme.overlay08)
-                        .frame(width: 28, height: 16)
+                        .frame(width: 24, height: 14)
                     Circle()
                         .fill(isOn ? tint : WorkerTheme.fg55)
-                        .frame(width: 12, height: 12)
+                        .frame(width: 10, height: 10)
                         .padding(2)
                 }
             }
-            .padding(.horizontal, 12)
-            .frame(height: 32)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
+            .frame(height: 30)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 8)
                     .fill(WorkerTheme.overlay04)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: 8)
                             .stroke(isOn ? tint.opacity(0.35) : WorkerTheme.overlay08, lineWidth: 0.5)
                     )
             )
@@ -120,23 +122,24 @@ struct WaterView: View {
     // MARK: - Cup hero (tappable)
 
     private var cupHero: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             Button(action: { store.waterAddCup() }) {
                 ZStack {
-                    // Water-fill cup illustration.
+                    // Water-fill cup — sized down from 130×160 to fit
+                    // the 380×580 panel without scroll.
                     cupShape
-                        .frame(width: 130, height: 160)
+                        .frame(width: 100, height: 130)
                 }
             }
             .buttonStyle(.plain)
             .help("点击杯子记录一杯水")
 
             // Progress dots
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 ForEach(0..<store.waterGoal, id: \.self) { i in
                     Circle()
                         .fill(i < store.waterCupsToday ? WorkerTheme.water : WorkerTheme.overlay08)
-                        .frame(width: 9, height: 9)
+                        .frame(width: 8, height: 8)
                         .overlay(
                             Circle()
                                 .stroke(WorkerTheme.overlay12, lineWidth: 0.5)
@@ -269,16 +272,6 @@ struct WaterView: View {
         .padding(.horizontal, 16)
     }
 
-    private var tipText: some View {
-        Text(store.waterCupsToday >= store.waterGoal
-             ? "今天的水喝够了，给自己鼓个掌 👏"
-             : "保持每小时一杯，工作更高效。")
-            .font(.system(size: 11))
-            .foregroundColor(WorkerTheme.fg45)
-            .padding(.horizontal, 20)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
-    }
 }
 
 // MARK: - Cup outline shape
