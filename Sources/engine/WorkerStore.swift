@@ -256,7 +256,11 @@ final class WorkerStore: ObservableObject {
                         title: "该起来动一下了",
                         body: "你已连续坐了 \(sitTriggerMin) 分钟，起身喝口水吧。"
                     )
-                    WorkerDebugLog.write("sit threshold notification fired (\(sitElapsedSec)s)")
+                    // 1Hz × 15 ticks of system Morse tone — the UN
+                    // notification ding is too easy to miss in a meeting,
+                    // so the sit alert gets a louder, longer signal.
+                    SoundPlayer.shared.playMorseSitAlert(count: 15)
+                    WorkerDebugLog.write("sit threshold notification + morse alert fired (\(sitElapsedSec)s)")
                 }
             }
 
@@ -463,6 +467,9 @@ final class WorkerStore: ObservableObject {
         defaults.set(false, forKey: K.sitEnabled)
         defaults.set(0, forKey: K.sitAccumActive)
         defaults.set(0.0, forKey: K.sitLastNotified)
+        // Silence any in-flight Morse alert from a prior trigger so the
+        // user stopping monitoring also stops the nag immediately.
+        SoundPlayer.shared.stop()
     }
 
     func sitSetTrigger(_ min: Int) {
