@@ -16,23 +16,22 @@ struct ClockoutView: View {
     var body: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 18) {
-                statusBadge
-
-                countdownDisplay
-
-                progressBar
-
-                controls
-
-                Divider()
-                    .background(WorkerTheme.overlay08)
-                    .padding(.horizontal, 24)
-
-                timeRow
-
-                tipText
-
-                Spacer(minLength: 0)
+                if store.isWeekend {
+                    weekendHero
+                    weekendTipText
+                    Spacer(minLength: 0)
+                } else {
+                    statusBadge
+                    countdownDisplay
+                    progressBar
+                    controls
+                    Divider()
+                        .background(WorkerTheme.overlay08)
+                        .padding(.horizontal, 24)
+                    timeRow
+                    tipText
+                    Spacer(minLength: 0)
+                }
             }
             .padding(.top, 8)
 
@@ -273,6 +272,72 @@ struct ClockoutView: View {
                         .stroke(WorkerTheme.overlay08, lineWidth: 0.5)
                 )
         )
+    }
+
+    // MARK: - Weekend mode
+
+    /// Weekend-mode hero — replaces the countdown card with a purple
+    /// "today's a weekend" panel. The clockout countdown still works
+    /// in the background (anyone working Saturday's edge case), but
+    /// the default UI no longer rubs in the fact that there's
+    /// theoretically a clockout time on a day no one's working.
+    private var weekendHero: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(WorkerTheme.weekendPurple)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: WorkerTheme.weekendPurple.opacity(0.7), radius: 4)
+                Text("今天不上班")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundColor(WorkerTheme.fg85)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 26)
+            .background(Capsule().fill(WorkerTheme.overlay06))
+
+            Text("🌴")
+                .font(.system(size: 64))
+                .padding(.top, 8)
+
+            Text("今天是周末")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(WorkerTheme.fgPrimary)
+
+            Text("去做你想做的事")
+                .font(.system(size: 13))
+                .foregroundColor(WorkerTheme.fg55)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            WorkerTheme.weekendPurple.opacity(0.18),
+                            WorkerTheme.weekendPurple.opacity(0.04)
+                        ],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(WorkerTheme.weekendPurple.opacity(0.35), lineWidth: 0.5)
+                )
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+    }
+
+    private var weekendTipText: some View {
+        Text("如果你周末也上班，记得在 周末 tab 取消休息时调整设置。\n（暂时还没做这个 toggle — 反正下周一会自动恢复倒计时。）")
+            .font(.system(size: 11))
+            .foregroundColor(WorkerTheme.fg45)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
     }
 
     private var tipText: some View {

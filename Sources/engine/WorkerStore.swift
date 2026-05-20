@@ -576,6 +576,14 @@ final class WorkerStore: ObservableObject {
     /// no observable "zero" frame — celebrating the "下班" moment was
     /// impossible. Now: hit zero, hold zero until midnight, restart at
     /// new day's wall-time countdown.
+    /// True iff today is Saturday or Sunday (local time). Used by
+    /// ClockoutView to switch to a "今天不上班" mode without forcing
+    /// the user to fiddle with their clockout time on the weekend.
+    var isWeekend: Bool {
+        let weekday = calendar.component(.weekday, from: Date())
+        return weekday == 1 || weekday == 7  // Sun = 1, Sat = 7
+    }
+
     var clockoutRemainingSec: Int {
         let now = Date()
         var comps = calendar.dateComponents([.year, .month, .day], from: now)
